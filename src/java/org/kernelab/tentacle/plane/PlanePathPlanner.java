@@ -14,6 +14,7 @@ import org.kernelab.tentacle.core.Region;
 import org.kernelab.tentacle.semi.AbstractGuider;
 import org.kernelab.tentacle.semi.AbstractPlanner;
 import org.kernelab.tentacle.util.Log;
+import org.kernelab.tentacle.util.MaxIterationReachedException;
 
 public class PlanePathPlanner extends AbstractPlanner
 {
@@ -24,8 +25,6 @@ public class PlanePathPlanner extends AbstractPlanner
 	public static final double	DETECT_RADIAN_DELTA	= Math.PI / 180.0;
 
 	public Set<Region>			bannedRegions		= null;
-
-	private int					iter				= 0;
 
 	public PlanePathPlanner(AppTentacle app)
 	{
@@ -163,9 +162,7 @@ public class PlanePathPlanner extends AbstractPlanner
 
 		result.add(starting);
 
-		this.iter = 0;
-
-		Coordinate end = this.planNext(result, guider, system, bannedRegions, null, starting, terminal);
+		Coordinate end = this.planNext(0, result, guider, system, bannedRegions, null, starting, terminal);
 
 		if (end != null)
 		{
@@ -180,15 +177,15 @@ public class PlanePathPlanner extends AbstractPlanner
 		return result;
 	}
 
-	protected Coordinate planNext(LinkedList<Coordinate> path, AbstractGuider guider, PlaneCoordinates system,
+	protected Coordinate planNext(int iter, LinkedList<Coordinate> path, AbstractGuider guider, PlaneCoordinates system,
 			Set<Region> bannedRegions, Coordinate previous, Coordinate current, Coordinate terminal)
 	{
-		if (this.iter > MAX_ITER && MAX_ITER > 0)
+		if (iter > MAX_ITER && MAX_ITER > 0)
 		{
-			throw new RuntimeException("Max iteration reached");
+			throw new MaxIterationReachedException();
 		}
 
-		Log.log("iter:" + this.iter);
+		Log.log("iter:" + iter);
 
 		do
 		{
@@ -202,8 +199,6 @@ public class PlanePathPlanner extends AbstractPlanner
 			{
 				for (Coordinate tr : trys)
 				{
-					this.iter++;
-
 					path.addLast(tr);
 					Log.log("added:" + tr);
 					this.refresh();
@@ -219,10 +214,18 @@ public class PlanePathPlanner extends AbstractPlanner
 					}
 					else
 					{
-						Coordinate found = this.planNext(path, guider, system, bannedRegions, current, tr, terminal);
-						if (found != null)
+						try
 						{
-							return found;
+							Coordinate found = this.planNext(iter + 1, path, guider, system, bannedRegions, current, tr,
+									terminal);
+							if (found != null)
+							{
+								return found;
+							}
+						}
+						catch (MaxIterationReachedException e)
+						{
+							Log.log("max iterated.");
 						}
 					}
 
